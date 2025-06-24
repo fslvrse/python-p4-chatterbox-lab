@@ -1,26 +1,55 @@
-from flask import Flask, request, make_response, jsonify
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_migrate import Migrate
 
 from models import db, Message
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///app.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.json.compact = False
 
 CORS(app)
 migrate = Migrate(app, db)
-
 db.init_app(app)
 
-@app.route('/messages')
-def messages():
-    return ''
+@app.route('/messages', methods=['GET'])
+def index_messages():
+    messages = Message.query.order_by(Message.created_at).all()
+    return jsonify([msg.to_dict() for msg in messages]), 200
 
-@app.route('/messages/<int:id>')
-def messages_by_id(id):
-    return ''
+@app.route('/messages', methods=['POST'])
+def post_message():
+    data = request.get_json()
+    message = Message(body=data.get("body"), username=data.get("username"))
+    db.session.add(message)
+    db.session.commit()
+    return jsonify(message.to_dict()), 201
+
+@app.route('/messages/<int:id>', methods=['PATCH'])
+def patch_message(id):
+    message = db.session.get(Message, id)
+    if not message:
+        return jsonify({"error": "Message not found"}), 404
+
+    data = request.get_json()
+    if 'body' in data:
+        message.body = data['body']
+    if 'username' in data:
+        message.username = data['username']
+
+    db.session.commit()
+    return jsonify(message.to_dict()), 200
+
+@app.route('/messages/<int:id>', methods=['DELETE'])
+def remove_message(id):
+    message = db.session.get(Message, id)
+    if not message:
+        return jsonify({"error": "Message not found"}), 404
+
+    db.session.delete(message)
+    db.session.commit()
+    return jsonify({"message": "Deleted successfully"}), 200
 
 if __name__ == '__main__':
     app.run(port=5555)
